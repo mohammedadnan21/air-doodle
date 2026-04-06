@@ -17,11 +17,9 @@ export default function DoodleCanvas({
 
   const modeRef = useRef(mode);
   const colorRef = useRef(activeColor);
-  const emitRef = useRef(onEmitParticles);
   const countRef = useRef(onStrokeCountChange);
   modeRef.current = mode;
   colorRef.current = activeColor;
-  emitRef.current = onEmitParticles;
   countRef.current = onStrokeCountChange;
 
   useEffect(() => {
@@ -34,11 +32,8 @@ export default function DoodleCanvas({
     const onResize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
     window.addEventListener('resize', onResize);
 
-    // Hand-tracking API — no-op since we keep it simple
     if (effectsRef) {
-      effectsRef.current = {
-        emitAt() {},
-      };
+      effectsRef.current = { emitAt() {} };
     }
 
     const toNorm = (e) => {
@@ -59,7 +54,6 @@ export default function DoodleCanvas({
         strokeManager.beginStroke();
         strokeManager.addPoint(p.x, p.y, 0, 1.0);
         drawing.current = true;
-        emitRef.current?.(p.x, p.y, colorRef.current, 'trail');
       } else if (modeRef.current === 'drag') {
         strokeManager.deselectAll();
         const hit = strokeManager.findStrokeAt(p.x, p.y, 0.045);
@@ -78,7 +72,6 @@ export default function DoodleCanvas({
 
       if (modeRef.current === 'draw' && drawing.current) {
         strokeManager.addPoint(p.x, p.y, 0, 1.0);
-        emitRef.current?.(p.x, p.y, colorRef.current, 'trail');
       } else if (modeRef.current === 'drag') {
         if (dragging.current) {
           const d = dragging.current;
@@ -96,8 +89,6 @@ export default function DoodleCanvas({
         strokeManager.endStroke();
         drawing.current = false;
         countRef.current?.(strokeManager.strokeCount);
-        const p = cursor.current;
-        if (p) emitRef.current?.(p.x, p.y, colorRef.current, 'burst');
       } else if (modeRef.current === 'drag' && dragging.current) {
         dragging.current.stroke.applyOffset();
         dragging.current.stroke.selected = false;
@@ -114,7 +105,6 @@ export default function DoodleCanvas({
     canvas.addEventListener('touchmove', onMove, { passive: false });
     canvas.addEventListener('touchend', onUp);
 
-    // ============ RENDER LOOP ============
     const render = () => {
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
@@ -126,28 +116,14 @@ export default function DoodleCanvas({
       for (const stroke of all) {
         const pts = stroke.getTransformedPoints();
         if (pts.length < 2) continue;
-        const lw = stroke.width * 2;
+        const lw = stroke.width * 1.5;
 
-        // Glow
-        ctx.save();
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.lineWidth = lw + 10;
-        ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = 0.15;
-        ctx.shadowColor = stroke.color;
-        ctx.shadowBlur = 30;
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x * w, pts[0].y * h);
-        for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x * w, pts[j].y * h);
-        ctx.stroke();
-        ctx.restore();
-
-        // Color line
+        // Soft glow
         ctx.save();
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.lineWidth = lw + 4;
         ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = 0.5;
+        ctx.globalAlpha = 0.25;
         ctx.shadowColor = stroke.color;
         ctx.shadowBlur = 12;
         ctx.beginPath();
@@ -156,14 +132,12 @@ export default function DoodleCanvas({
         ctx.stroke();
         ctx.restore();
 
-        // Core
+        // Main colored line
         ctx.save();
         ctx.lineCap = 'round'; ctx.lineJoin = 'round';
         ctx.lineWidth = lw;
-        ctx.strokeStyle = '#fff';
+        ctx.strokeStyle = stroke.color;
         ctx.globalAlpha = 0.9;
-        ctx.shadowColor = stroke.color;
-        ctx.shadowBlur = 6;
         ctx.beginPath();
         ctx.moveTo(pts[0].x * w, pts[0].y * h);
         for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x * w, pts[j].y * h);
@@ -175,8 +149,7 @@ export default function DoodleCanvas({
           ctx.save();
           const b = stroke.getBounds(); const pad = 0.02;
           ctx.setLineDash([6, 4]);
-          ctx.strokeStyle = stroke.color + '80'; ctx.lineWidth = 1.5;
-          ctx.shadowColor = stroke.color; ctx.shadowBlur = 8;
+          ctx.strokeStyle = stroke.color + '80'; ctx.lineWidth = 1;
           ctx.strokeRect((b.minX - pad) * w, (b.minY - pad) * h,
             (b.maxX - b.minX + pad * 2) * w, (b.maxY - b.minY + pad * 2) * h);
           ctx.restore();
@@ -186,47 +159,28 @@ export default function DoodleCanvas({
         if (stroke.selected) {
           ctx.save();
           const b = stroke.getBounds(); const pad = 0.025;
-          const bx = (b.minX - pad) * w, by = (b.minY - pad) * h;
-          const bw2 = (b.maxX - b.minX + pad * 2) * w, bh2 = (b.maxY - b.minY + pad * 2) * h;
           ctx.setLineDash([8, 5]);
-          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-          ctx.shadowColor = stroke.color; ctx.shadowBlur = 10;
-          ctx.strokeRect(bx, by, bw2, bh2);
+          ctx.strokeStyle = '#fff'; ctx.lineWidth = 1;
+          ctx.strokeRect((b.minX - pad) * w, (b.minY - pad) * h,
+            (b.maxX - b.minX + pad * 2) * w, (b.maxY - b.minY + pad * 2) * h);
           ctx.restore();
         }
       }
 
-      // Cursor
+      // Cursor dot
       const cp = cursor.current;
-      if (cp) {
+      if (cp && modeRef.current === 'draw') {
         const cx = cp.x * w, cy = cp.y * h;
-        const color = colorRef.current;
+        canvas.style.cursor = 'none';
         ctx.save();
-
-        if (dragging.current) {
-          canvas.style.cursor = 'grabbing';
-        } else if (drawing.current) {
-          canvas.style.cursor = 'none';
-          ctx.fillStyle = '#fff';
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 10;
-          ctx.beginPath();
-          ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-          ctx.fill();
-        } else if (modeRef.current === 'drag' && hovered.current) {
-          canvas.style.cursor = 'grab';
-        } else if (modeRef.current === 'drag') {
-          canvas.style.cursor = 'default';
-        } else {
-          canvas.style.cursor = 'none';
-          ctx.fillStyle = 'rgba(255,255,255,0.5)';
-          ctx.shadowColor = color;
-          ctx.shadowBlur = 6;
-          ctx.beginPath();
-          ctx.arc(cx, cy, 3, 0, Math.PI * 2);
-          ctx.fill();
-        }
+        ctx.fillStyle = colorRef.current;
+        ctx.globalAlpha = 0.8;
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3, 0, Math.PI * 2);
+        ctx.fill();
         ctx.restore();
+      } else if (modeRef.current === 'drag') {
+        canvas.style.cursor = dragging.current ? 'grabbing' : (hovered.current ? 'grab' : 'default');
       }
 
       raf.current = requestAnimationFrame(render);

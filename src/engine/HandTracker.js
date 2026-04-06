@@ -85,7 +85,7 @@ export class HandTracker {
 
   _getFingerStates(landmarks) {
     const isExtended = (tip, pip) => landmarks[tip].y < landmarks[pip].y;
-    const thumbExtended = Math.abs(landmarks[FINGER_TIPS.thumb].x - landmarks[FINGER_PIPS.thumb].x) > 0.04;
+    const thumbExtended = Math.abs(landmarks[FINGER_TIPS.thumb].x - landmarks[FINGER_PIPS.thumb].x) > 0.07;
 
     return {
       thumb: thumbExtended,
@@ -97,39 +97,37 @@ export class HandTracker {
   }
 
   _classifyGesture(fingers, landmarks) {
-    const extendedCount = Object.values(fingers).filter(Boolean).length;
+    const { thumb, index, middle, ring, pinky } = fingers;
 
     const thumbTip = landmarks[FINGER_TIPS.thumb];
     const indexTip = landmarks[FINGER_TIPS.index];
     const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
 
-    if (pinchDist < 0.05 && !fingers.middle && !fingers.ring && !fingers.pinky) {
+    if (pinchDist < 0.05 && !middle && !ring && !pinky) {
       return 'pinch';
     }
 
-    if (fingers.index && !fingers.middle && !fingers.ring && !fingers.pinky) {
+    if (index && !middle && !ring && !pinky) {
       return 'point';
     }
 
-    if (fingers.index && fingers.middle && !fingers.ring && !fingers.pinky) {
+    if (index && middle && !ring && !pinky) {
       return 'peace';
     }
 
-    if (fingers.index && fingers.middle && fingers.ring && !fingers.pinky) {
+    if (index && middle && ring && !pinky) {
       return 'three';
     }
 
-    // Thumbs up: only thumb extended — UNDO
-    if (fingers.thumb && !fingers.index && !fingers.middle && !fingers.ring && !fingers.pinky) {
+    if (thumb && !index && !middle && !ring && !pinky) {
       return 'thumbsup';
     }
 
-    if (extendedCount >= 4) {
+    if (thumb && index && middle && ring && pinky) {
       return 'open';
     }
 
-    // Fist: nothing extended — IDLE
-    if (extendedCount === 0) {
+    if (!thumb && !index && !middle && !ring && !pinky) {
       return 'fist';
     }
 

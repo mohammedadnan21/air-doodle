@@ -1,5 +1,5 @@
-const GESTURE_HOLD_MS = 80;
-const GESTURE_COOLDOWN_MS = 350;
+const GESTURE_HOLD_MS = 120;
+const GESTURE_COOLDOWN_MS = 800;
 
 export class GestureStateMachine {
   constructor(onGestureChange) {
