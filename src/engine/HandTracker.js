@@ -85,7 +85,9 @@ export class HandTracker {
 
   _getFingerStates(landmarks) {
     const isExtended = (tip, pip) => landmarks[tip].y < landmarks[pip].y;
-    const thumbExtended = Math.abs(landmarks[FINGER_TIPS.thumb].x - landmarks[FINGER_PIPS.thumb].x) > 0.07;
+    const thumbDx = Math.abs(landmarks[FINGER_TIPS.thumb].x - landmarks[FINGER_PIPS.thumb].x);
+    const thumbDy = landmarks[FINGER_PIPS.thumb].y - landmarks[FINGER_TIPS.thumb].y;
+    const thumbExtended = thumbDx > 0.06 || thumbDy > 0.045;
 
     return {
       thumb: thumbExtended,
@@ -103,30 +105,37 @@ export class HandTracker {
     const indexTip = landmarks[FINGER_TIPS.index];
     const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
 
+    // Pinch: thumb + index tips close, others curled
     if (pinchDist < 0.05 && !middle && !ring && !pinky) {
       return 'pinch';
     }
 
-    if (index && !middle && !ring && !pinky) {
-      return 'point';
+    // Open/pause: all four main fingers extended (thumb doesn't matter)
+    if (index && middle && ring && pinky) {
+      return 'open';
     }
 
-    if (index && middle && !ring && !pinky) {
-      return 'peace';
-    }
-
+    // Three/color: index + middle + ring up, pinky down
     if (index && middle && ring && !pinky) {
       return 'three';
     }
 
+    // Peace/erase: index + middle up, ring + pinky down
+    if (index && middle && !ring && !pinky) {
+      return 'peace';
+    }
+
+    // Point/draw: only index up
+    if (index && !middle && !ring && !pinky) {
+      return 'point';
+    }
+
+    // Thumbs up/undo: only thumb extended, all others curled
     if (thumb && !index && !middle && !ring && !pinky) {
       return 'thumbsup';
     }
 
-    if (thumb && index && middle && ring && pinky) {
-      return 'open';
-    }
-
+    // Fist/idle: nothing extended
     if (!thumb && !index && !middle && !ring && !pinky) {
       return 'fist';
     }
