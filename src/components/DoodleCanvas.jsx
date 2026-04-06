@@ -116,28 +116,13 @@ export default function DoodleCanvas({
       for (const stroke of all) {
         const pts = stroke.getTransformedPoints();
         if (pts.length < 2) continue;
-        const lw = stroke.width * 1.5;
 
-        // Soft glow
         ctx.save();
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.lineWidth = lw + 4;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        ctx.lineWidth = stroke.width;
         ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = 0.25;
-        ctx.shadowColor = stroke.color;
-        ctx.shadowBlur = 12;
-        ctx.beginPath();
-        ctx.moveTo(pts[0].x * w, pts[0].y * h);
-        for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x * w, pts[j].y * h);
-        ctx.stroke();
-        ctx.restore();
-
-        // Main colored line
-        ctx.save();
-        ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-        ctx.lineWidth = lw;
-        ctx.strokeStyle = stroke.color;
-        ctx.globalAlpha = 0.9;
+        ctx.globalAlpha = 1;
         ctx.beginPath();
         ctx.moveTo(pts[0].x * w, pts[0].y * h);
         for (let j = 1; j < pts.length; j++) ctx.lineTo(pts[j].x * w, pts[j].y * h);
