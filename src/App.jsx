@@ -61,22 +61,15 @@ export default function App() {
       const color = activeColorRef.current;
 
       if (g === 'point' || g === 'pinch') {
-        const fx = effectsRef.current;
         if (!drawingRef.current) {
           strokeManager.beginStroke();
           drawingRef.current = true;
           soundEngine.current.play('draw_start');
-          if (fx) fx.emitAt(mx, my, color, 'start');
         }
         strokeManager.addPoint(mx, my, indexTip.z);
         setStrokeCount(strokeManager.strokeCount);
-        if (fx) fx.emitAt(mx, my, color, 'move');
-        const particles = window._airDoodleParticles;
-        if (particles) particles.emitTrail(mx, my, 0, color, g === 'pinch' ? 2 : 4);
       } else {
         if (drawingRef.current) {
-          const fx = effectsRef.current;
-          if (fx) fx.emitAt(mx, my, color, 'end');
           strokeManager.endStroke();
           drawingRef.current = false;
           soundEngine.current.play('draw_end');
@@ -89,8 +82,6 @@ export default function App() {
         if (erased) {
           setStrokeCount(strokeManager.strokeCount);
           soundEngine.current.play('erase');
-          const particles = window._airDoodleParticles;
-          if (particles) particles.emitBurst(mx, my, 0, '#ff00e5', 15);
         }
       }
 
@@ -99,8 +90,6 @@ export default function App() {
         setActiveColor(next.hex);
         strokeManager.setColor(next.hex);
         soundEngine.current.play('color_switch');
-        const particles = window._airDoodleParticles;
-        if (particles) particles.emitBurst(mx, my, 0, next.hex, 30);
       }
 
       if (g === 'thumbsup' && data.canTrigger?.()) {

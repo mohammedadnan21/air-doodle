@@ -61,7 +61,7 @@ export class StrokeManager {
     this.undoStack = [];
     this.currentStroke = null;
     this.activeColor = '#00f0ff';
-    this.strokeWidth = 5;
+    this.strokeWidth = 3;
     this._onChange = null;
   }
 
