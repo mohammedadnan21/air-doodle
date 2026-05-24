@@ -27,37 +27,47 @@ export default function AirCanvas({ canvasRef: externalCanvasRef }) {
 
     const particles = new ParticleSystem(scene);
 
-    internals.current = { scene, camera, renderer, particles, lastTime: performance.now() };
+    const state = {
+      scene, camera, renderer, particles,
+      lastTime: performance.now(),
+      rafId: null,
+      disposed: false,
+    };
+    internals.current = state;
 
     const animate = () => {
-      if (!internals.current) return;
-      requestAnimationFrame(animate);
+      if (state.disposed) return;
+      state.rafId = requestAnimationFrame(animate);
       const now = performance.now();
-      const dt = Math.min((now - internals.current.lastTime) / 1000, 0.1);
-      internals.current.lastTime = now;
+      const dt = Math.min((now - state.lastTime) / 1000, 0.1);
+      state.lastTime = now;
 
-      internals.current.particles.update(dt);
-      internals.current.renderer.render(internals.current.scene, internals.current.camera);
+      state.particles.update(dt);
+      state.renderer.render(state.scene, state.camera);
     };
-    animate();
+    state.rafId = requestAnimationFrame(animate);
 
     const handleResize = () => {
-      if (!internals.current) return;
-      internals.current.renderer.setSize(window.innerWidth, window.innerHeight);
+      if (state.disposed) return;
+      state.renderer.setSize(window.innerWidth, window.innerHeight);
     };
     window.addEventListener('resize', handleResize);
-    internals.current._cleanup = () => window.removeEventListener('resize', handleResize);
+    state._cleanup = () => window.removeEventListener('resize', handleResize);
   }, [externalCanvasRef]);
 
   useEffect(() => {
     init();
+    const mount = mountRef.current;
     return () => {
-      if (internals.current) {
-        internals.current._cleanup?.();
-        internals.current.particles.dispose();
-        internals.current.renderer.dispose();
-        if (mountRef.current && internals.current.renderer.domElement.parentNode === mountRef.current) {
-          mountRef.current.removeChild(internals.current.renderer.domElement);
+      const state = internals.current;
+      if (state) {
+        state.disposed = true;
+        if (state.rafId != null) cancelAnimationFrame(state.rafId);
+        state._cleanup?.();
+        state.particles.dispose();
+        state.renderer.dispose();
+        if (mount && state.renderer.domElement.parentNode === mount) {
+          mount.removeChild(state.renderer.domElement);
         }
         internals.current = null;
       }

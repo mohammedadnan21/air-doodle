@@ -42,7 +42,7 @@ const fragmentShader = `
     float intensity = mix(glowFalloff, coreFalloff, 0.5);
 
     vec3 col = vColor * intensity * 1.8;
-    col += vColor * glowFalloff * 0.5; // outer glow
+    col += vColor * glowFalloff * 0.5;
 
     float alpha = vAlpha * intensity * smoothstep(0.0, 0.15, vLife);
     gl_FragColor = vec4(col, alpha);
@@ -52,8 +52,8 @@ const fragmentShader = `
 export class ParticleSystem {
   constructor(scene) {
     this.scene = scene;
-    this.particles = [];
     this.poolIndex = 0;
+    this._colorCache = new Map();
 
     const geometry = new THREE.BufferGeometry();
     const positions = new Float32Array(MAX_PARTICLES * 3);
@@ -80,15 +80,15 @@ export class ParticleSystem {
     this.mesh.frustumCulled = false;
     scene.add(this.mesh);
 
-    this._pool = [];
+    this._pool = new Array(MAX_PARTICLES);
     for (let i = 0; i < MAX_PARTICLES; i++) {
-      this._pool.push({
+      this._pool[i] = {
         x: 0, y: 0, z: 0,
         vx: 0, vy: 0, vz: 0,
         life: 0, maxLife: PARTICLE_LIFETIME,
         size: 4, color: [0, 0.94, 1],
         alpha: 1.0, active: false,
-      });
+      };
     }
   }
 
@@ -100,8 +100,9 @@ export class ParticleSystem {
         return idx;
       }
     }
+    const idx = this.poolIndex;
     this.poolIndex = (this.poolIndex + 1) % MAX_PARTICLES;
-    return this.poolIndex;
+    return idx;
   }
 
   emitTrail(x, y, z, color, count = TRAIL_PARTICLES_PER_FRAME) {
@@ -147,24 +148,24 @@ export class ParticleSystem {
   }
 
   update(dt) {
-    const posAttr = this.mesh.geometry.getAttribute('position');
-    const colAttr = this.mesh.geometry.getAttribute('aColor');
-    const lifeAttr = this.mesh.geometry.getAttribute('aLife');
-    const sizeAttr = this.mesh.geometry.getAttribute('aSize');
-    const alphaAttr = this.mesh.geometry.getAttribute('aAlpha');
+    const posArr = this.mesh.geometry.getAttribute('position').array;
+    const colArr = this.mesh.geometry.getAttribute('aColor').array;
+    const lifeArr = this.mesh.geometry.getAttribute('aLife').array;
+    const sizeArr = this.mesh.geometry.getAttribute('aSize').array;
+    const alphaArr = this.mesh.geometry.getAttribute('aAlpha').array;
 
     for (let i = 0; i < MAX_PARTICLES; i++) {
       const p = this._pool[i];
       if (!p.active) {
-        posAttr.array[i * 3 + 2] = -999;
-        alphaAttr.array[i] = 0;
+        posArr[i * 3 + 2] = -999;
+        alphaArr[i] = 0;
         continue;
       }
 
       p.life -= dt;
       if (p.life <= 0) {
         p.active = false;
-        alphaAttr.array[i] = 0;
+        alphaArr[i] = 0;
         continue;
       }
 
@@ -176,33 +177,40 @@ export class ParticleSystem {
 
       const lifeRatio = p.life / p.maxLife;
 
-      posAttr.array[i * 3] = p.x;
-      posAttr.array[i * 3 + 1] = p.y;
-      posAttr.array[i * 3 + 2] = p.z;
-      colAttr.array[i * 3] = p.color[0];
-      colAttr.array[i * 3 + 1] = p.color[1];
-      colAttr.array[i * 3 + 2] = p.color[2];
-      lifeAttr.array[i] = lifeRatio;
-      sizeAttr.array[i] = p.size * lifeRatio;
-      alphaAttr.array[i] = p.alpha * lifeRatio;
+      posArr[i * 3] = p.x;
+      posArr[i * 3 + 1] = p.y;
+      posArr[i * 3 + 2] = p.z;
+      colArr[i * 3] = p.color[0];
+      colArr[i * 3 + 1] = p.color[1];
+      colArr[i * 3 + 2] = p.color[2];
+      lifeArr[i] = lifeRatio;
+      sizeArr[i] = p.size * lifeRatio;
+      alphaArr[i] = p.alpha * lifeRatio;
     }
 
-    posAttr.needsUpdate = true;
-    colAttr.needsUpdate = true;
-    lifeAttr.needsUpdate = true;
-    sizeAttr.needsUpdate = true;
-    alphaAttr.needsUpdate = true;
+    const geo = this.mesh.geometry;
+    geo.getAttribute('position').needsUpdate = true;
+    geo.getAttribute('aColor').needsUpdate = true;
+    geo.getAttribute('aLife').needsUpdate = true;
+    geo.getAttribute('aSize').needsUpdate = true;
+    geo.getAttribute('aAlpha').needsUpdate = true;
   }
 
   _parseColor(color) {
     if (Array.isArray(color)) return color;
+    let cached = this._colorCache.get(color);
+    if (cached) return cached;
     const c = new THREE.Color(color);
-    return [c.r, c.g, c.b];
+    cached = [c.r, c.g, c.b];
+    if (this._colorCache.size > 64) this._colorCache.clear();
+    this._colorCache.set(color, cached);
+    return cached;
   }
 
   dispose() {
     this.mesh.geometry.dispose();
     this.mesh.material.dispose();
     this.scene.remove(this.mesh);
+    this._colorCache.clear();
   }
 }

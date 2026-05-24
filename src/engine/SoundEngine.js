@@ -5,44 +5,49 @@ export class SoundEngine {
     this.initialized = false;
     this.synths = {};
     this.enabled = true;
+    this._disposed = false;
   }
 
   async init() {
-    if (this.initialized) return;
-    await Tone.start();
+    if (this.initialized || this._disposed) return;
+    try {
+      await Tone.start();
 
-    this.synths.draw = new Tone.Synth({
-      oscillator: { type: 'sine' },
-      envelope: { attack: 0.01, decay: 0.1, sustain: 0.05, release: 0.3 },
-      volume: -20,
-    }).toDestination();
+      this.synths.draw = new Tone.Synth({
+        oscillator: { type: 'sine' },
+        envelope: { attack: 0.01, decay: 0.1, sustain: 0.05, release: 0.3 },
+        volume: -20,
+      }).toDestination();
 
-    this.synths.gestureChange = new Tone.MembraneSynth({
-      pitchDecay: 0.01,
-      octaves: 2,
-      envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
-      volume: -18,
-    }).toDestination();
+      this.synths.gestureChange = new Tone.MembraneSynth({
+        pitchDecay: 0.01,
+        octaves: 2,
+        envelope: { attack: 0.001, decay: 0.15, sustain: 0, release: 0.1 },
+        volume: -18,
+      }).toDestination();
 
-    this.synths.undo = new Tone.PluckSynth({ volume: -15 }).toDestination();
+      this.synths.undo = new Tone.PluckSynth({ volume: -15 }).toDestination();
 
-    this.synths.clear = new Tone.NoiseSynth({
-      noise: { type: 'pink' },
-      envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.2 },
-      volume: -22,
-    }).toDestination();
+      this.synths.clear = new Tone.NoiseSynth({
+        noise: { type: 'pink' },
+        envelope: { attack: 0.01, decay: 0.3, sustain: 0, release: 0.2 },
+        volume: -22,
+      }).toDestination();
 
-    this.synths.colorSwitch = new Tone.Synth({
-      oscillator: { type: 'triangle' },
-      envelope: { attack: 0.01, decay: 0.08, sustain: 0, release: 0.2 },
-      volume: -16,
-    }).toDestination();
+      this.synths.colorSwitch = new Tone.Synth({
+        oscillator: { type: 'triangle' },
+        envelope: { attack: 0.01, decay: 0.08, sustain: 0, release: 0.2 },
+        volume: -16,
+      }).toDestination();
 
-    this.initialized = true;
+      this.initialized = true;
+    } catch (err) {
+      console.error('SoundEngine init failed:', err);
+    }
   }
 
   play(event) {
-    if (!this.initialized || !this.enabled) return;
+    if (!this.initialized || !this.enabled || this._disposed) return;
 
     try {
       const now = Tone.now();
@@ -80,8 +85,11 @@ export class SoundEngine {
   }
 
   dispose() {
-    Object.values(this.synths).forEach((s) => s.dispose());
-    this.synths = {};
+    this._disposed = true;
     this.initialized = false;
+    Object.values(this.synths).forEach((s) => {
+      try { s.dispose(); } catch { /* already disposed */ }
+    });
+    this.synths = {};
   }
 }

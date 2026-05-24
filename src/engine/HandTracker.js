@@ -1,7 +1,9 @@
-const LANDMARK_COUNT = 21;
-
 const FINGER_TIPS = { thumb: 4, index: 8, middle: 12, ring: 16, pinky: 20 };
 const FINGER_PIPS = { thumb: 3, index: 6, middle: 10, ring: 14, pinky: 18 };
+const LANDMARK_COUNT = 21;
+const SCRIPT_TIMEOUT_MS = 15000;
+
+let loadPromise = null;
 
 function loadScript(src) {
   return new Promise((resolve, reject) => {
@@ -9,15 +11,23 @@ function loadScript(src) {
     const s = document.createElement('script');
     s.src = src;
     s.crossOrigin = 'anonymous';
-    s.onload = resolve;
-    s.onerror = reject;
+    const timer = setTimeout(() => {
+      reject(new Error(`Script load timeout: ${src}`));
+    }, SCRIPT_TIMEOUT_MS);
+    s.onload = () => { clearTimeout(timer); resolve(); };
+    s.onerror = () => { clearTimeout(timer); reject(new Error(`Script load failed: ${src}`)); };
     document.head.appendChild(s);
   });
 }
 
-async function loadMediaPipe() {
-  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js');
-  await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+function loadMediaPipe() {
+  if (!loadPromise) {
+    loadPromise = (async () => {
+      await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js');
+      await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
+    })();
+  }
+  return loadPromise;
 }
 
 export class HandTracker {
@@ -32,7 +42,6 @@ export class HandTracker {
   async start(videoElement) {
     await loadMediaPipe();
 
-    /* globals Hands, Camera */
     this.hands = new window.Hands({
       locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
@@ -46,7 +55,13 @@ export class HandTracker {
 
     this.camera = new window.Camera(videoElement, {
       onFrame: async () => {
-        if (this.running) await this.hands.send({ image: videoElement });
+        if (this.running && this.hands) {
+          try {
+            await this.hands.send({ image: videoElement });
+          } catch {
+            // frame send can fail during teardown
+          }
+        }
       },
       width: 1280,
       height: 720,
@@ -57,10 +72,17 @@ export class HandTracker {
 
   stop() {
     this.running = false;
-    if (this.camera) this.camera.stop();
+    try {
+      if (this.camera) this.camera.stop();
+    } catch {
+      // camera may already be stopped
+    }
+    this.hands = null;
+    this.camera = null;
   }
 
   _handleResults(results) {
+    if (!this.running) return;
     if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
       this.onResults({ detected: false, landmarks: null, handedness: null, gesture: null });
       return;
@@ -105,40 +127,13 @@ export class HandTracker {
     const indexTip = landmarks[FINGER_TIPS.index];
     const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
 
-    // Pinch: thumb + index tips close, others curled
-    if (pinchDist < 0.05 && !middle && !ring && !pinky) {
-      return 'pinch';
-    }
-
-    // Open/pause: all four main fingers extended (thumb doesn't matter)
-    if (index && middle && ring && pinky) {
-      return 'open';
-    }
-
-    // Three/color: index + middle + ring up, pinky down
-    if (index && middle && ring && !pinky) {
-      return 'three';
-    }
-
-    // Peace/erase: index + middle up, ring + pinky down
-    if (index && middle && !ring && !pinky) {
-      return 'peace';
-    }
-
-    // Point/draw: only index up
-    if (index && !middle && !ring && !pinky) {
-      return 'point';
-    }
-
-    // Thumbs up/undo: only thumb extended, all others curled
-    if (thumb && !index && !middle && !ring && !pinky) {
-      return 'thumbsup';
-    }
-
-    // Fist/idle: nothing extended
-    if (!thumb && !index && !middle && !ring && !pinky) {
-      return 'fist';
-    }
+    if (pinchDist < 0.05 && !middle && !ring && !pinky) return 'pinch';
+    if (index && middle && ring && pinky) return 'open';
+    if (index && middle && ring && !pinky) return 'three';
+    if (index && middle && !ring && !pinky) return 'peace';
+    if (index && !middle && !ring && !pinky) return 'point';
+    if (thumb && !index && !middle && !ring && !pinky) return 'thumbsup';
+    if (!thumb && !index && !middle && !ring && !pinky) return 'fist';
 
     return 'unknown';
   }

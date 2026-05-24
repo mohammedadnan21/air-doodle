@@ -17,9 +17,9 @@ export default function GestureHUD({ gesture, color, fps, strokeCount }) {
   const info = GESTURE_INFO[gesture] || GESTURE_INFO.unknown;
 
   useEffect(() => {
-    setFlash(true);
-    const t = setTimeout(() => setFlash(false), 300);
-    return () => clearTimeout(t);
+    const show = setTimeout(() => setFlash(true), 0);
+    const hide = setTimeout(() => setFlash(false), 300);
+    return () => { clearTimeout(show); clearTimeout(hide); };
   }, [gesture]);
 
   return (

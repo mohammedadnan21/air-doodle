@@ -1,3 +1,7 @@
+const MAX_STROKES = 500;
+const MAX_POINTS_PER_STROKE = 5000;
+const MAX_UNDO = 100;
+
 export class Stroke {
   constructor(color, width = 5) {
     this.points = [];
@@ -7,15 +11,20 @@ export class Stroke {
     this.offsetX = 0;
     this.offsetY = 0;
     this.selected = false;
+    this._boundsCache = null;
+    this._boundsDirty = true;
   }
 
   addPoint(x, y, z = 0, pressure = 1.0) {
+    if (this.points.length >= MAX_POINTS_PER_STROKE) return;
     const last = this.points[this.points.length - 1];
     if (last && Math.hypot(x - last.x, y - last.y) < 0.001) return;
     this.points.push({ x, y, z, pressure, time: performance.now() });
+    this._boundsDirty = true;
   }
 
   getTransformedPoints() {
+    if (this.offsetX === 0 && this.offsetY === 0) return this.points;
     return this.points.map((p) => ({
       ...p,
       x: p.x + this.offsetX,
@@ -30,9 +39,11 @@ export class Stroke {
     }
     this.offsetX = 0;
     this.offsetY = 0;
+    this._boundsDirty = true;
   }
 
   getBounds() {
+    if (!this._boundsDirty && this._boundsCache) return this._boundsCache;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const p of this.points) {
       const px = p.x + this.offsetX;
@@ -42,10 +53,17 @@ export class Stroke {
       if (px > maxX) maxX = px;
       if (py > maxY) maxY = py;
     }
-    return { minX, minY, maxX, maxY };
+    this._boundsCache = { minX, minY, maxX, maxY };
+    this._boundsDirty = false;
+    return this._boundsCache;
   }
 
   hitTest(x, y, threshold = 0.045) {
+    const b = this.getBounds();
+    if (x < b.minX - threshold || x > b.maxX + threshold ||
+        y < b.minY - threshold || y > b.maxY + threshold) {
+      return false;
+    }
     for (const p of this.points) {
       if (Math.hypot(p.x + this.offsetX - x, p.y + this.offsetY - y) < threshold) return true;
     }
@@ -85,6 +103,9 @@ export class StrokeManager {
     this.currentStroke = null;
     if (stroke.isEmpty) return null;
     this.strokes.push(stroke);
+    if (this.strokes.length > MAX_STROKES) {
+      this.strokes.splice(0, this.strokes.length - MAX_STROKES);
+    }
     this.undoStack = [];
     this._notify();
     return stroke;
@@ -93,6 +114,9 @@ export class StrokeManager {
   undo() {
     if (!this.strokes.length) return false;
     this.undoStack.push(this.strokes.pop());
+    if (this.undoStack.length > MAX_UNDO) {
+      this.undoStack.shift();
+    }
     this._notify();
     return true;
   }
@@ -105,7 +129,8 @@ export class StrokeManager {
   }
 
   clear() {
-    this.undoStack = [...this.strokes];
+    const toKeep = this.strokes.slice(-MAX_UNDO);
+    this.undoStack = toKeep;
     this.strokes = [];
     this.currentStroke = null;
     this._notify();
@@ -113,9 +138,20 @@ export class StrokeManager {
 
   eraseNear(x, y, radius = 0.04) {
     const before = this.strokes.length;
-    this.strokes = this.strokes.filter(
-      (s) => !s.getTransformedPoints().some((p) => Math.hypot(p.x - x, p.y - y) < radius),
-    );
+    const r2 = radius * radius;
+    this.strokes = this.strokes.filter((s) => {
+      const b = s.getBounds();
+      if (x < b.minX - radius || x > b.maxX + radius ||
+          y < b.minY - radius || y > b.maxY + radius) {
+        return true;
+      }
+      for (const p of s.points) {
+        const dx = (p.x + s.offsetX) - x;
+        const dy = (p.y + s.offsetY) - y;
+        if (dx * dx + dy * dy < r2) return false;
+      }
+      return true;
+    });
     if (this.strokes.length < before) this._notify();
     return this.strokes.length < before;
   }

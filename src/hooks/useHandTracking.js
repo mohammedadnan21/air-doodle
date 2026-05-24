@@ -8,8 +8,8 @@ export function useHandTracking(onFrame, onGestureChange) {
   const trackerRef = useRef(null);
   const smootherRef = useRef(new PointSmoother());
   const [status, setStatus] = useState('idle');
+  const startingRef = useRef(false);
 
-  // Store callbacks in refs so the tracker always calls the latest version
   const onFrameRef = useRef(onFrame);
   const onGestureChangeRef = useRef(onGestureChange);
   useEffect(() => { onFrameRef.current = onFrame; }, [onFrame]);
@@ -46,7 +46,8 @@ export function useHandTracking(onFrame, onGestureChange) {
   }, []);
 
   const start = useCallback(async () => {
-    if (status === 'active') return;
+    if (status === 'active' || startingRef.current) return;
+    startingRef.current = true;
     setStatus('loading');
 
     try {
@@ -60,15 +61,15 @@ export function useHandTracking(onFrame, onGestureChange) {
       video.srcObject = stream;
       await new Promise((resolve, reject) => {
         const timeout = setTimeout(() => reject(new Error('Video load timeout')), 30000);
-        video.onloadedmetadata = () => {
+        let resolved = false;
+        const done = () => {
+          if (resolved) return;
+          resolved = true;
           clearTimeout(timeout);
           video.play().then(resolve).catch(reject);
         };
-        // If metadata already loaded (e.g. re-using element)
-        if (video.readyState >= 1) {
-          clearTimeout(timeout);
-          video.play().then(resolve).catch(reject);
-        }
+        video.onloadedmetadata = done;
+        if (video.readyState >= 1) done();
       });
 
       trackerRef.current = new HandTracker({ onResults: handleResults });
@@ -78,14 +79,19 @@ export function useHandTracking(onFrame, onGestureChange) {
     } catch (err) {
       console.error('Hand tracking init failed:', err);
       setStatus('error');
+    } finally {
+      startingRef.current = false;
     }
   }, [status, handleResults]);
 
   const stop = useCallback(() => {
     trackerRef.current?.stop();
+    trackerRef.current = null;
     if (videoRef.current?.srcObject) {
       videoRef.current.srcObject.getTracks().forEach((t) => t.stop());
+      videoRef.current.srcObject = null;
     }
+    startingRef.current = false;
     setStatus('idle');
   }, []);
 

@@ -12,6 +12,8 @@ import Toolbar from './components/Toolbar';
 import GestureGuide from './components/GestureGuide';
 import StartScreen from './components/StartScreen';
 
+const FPS_WINDOW = 60;
+
 export default function App() {
   const [started, setStarted] = useState(false);
   const [gesture, setGesture] = useState('none');
@@ -24,24 +26,52 @@ export default function App() {
   const [mode, setMode] = useState('draw');
   const [cameraActive, setCameraActive] = useState(false);
   const [wantCamera, setWantCamera] = useState(false);
-  const [dimensions] = useState({ width: window.innerWidth, height: window.innerHeight });
+  const [dimensions, setDimensions] = useState({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  });
 
   const strokeManager = useMemo(() => new StrokeManager(), []);
   const soundEngine = useRef(new SoundEngine());
   const canvasRef = useRef(null);
   const drawingRef = useRef(false);
-  const fpsFrames = useRef([]);
   const activeColorRef = useRef(activeColor);
   const effectsRef = useRef(null);
+
+  const fpsRing = useRef(new Float64Array(FPS_WINDOW));
+  const fpsIndex = useRef(0);
+  const fpsCount = useRef(0);
+
   useEffect(() => { activeColorRef.current = activeColor; }, [activeColor]);
 
-  // --- Hand-tracking frame handler ---
+  useEffect(() => {
+    const onResize = () => {
+      setDimensions({ width: window.innerWidth, height: window.innerHeight });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+
+  useEffect(() => {
+    const engine = soundEngine.current;
+    return () => { engine.dispose(); };
+  }, []);
+
   const onFrame = useCallback(
     (data) => {
       const now = performance.now();
-      fpsFrames.current.push(now);
-      fpsFrames.current = fpsFrames.current.filter((t) => now - t < 1000);
-      if (fpsFrames.current.length % 10 === 0) setFps(fpsFrames.current.length);
+      const ring = fpsRing.current;
+      ring[fpsIndex.current] = now;
+      fpsIndex.current = (fpsIndex.current + 1) % FPS_WINDOW;
+      if (fpsCount.current < FPS_WINDOW) fpsCount.current++;
+
+      if (fpsCount.current > 1) {
+        const oldest = ring[(fpsIndex.current - fpsCount.current + FPS_WINDOW) % FPS_WINDOW];
+        const elapsed = (now - oldest) / 1000;
+        if (elapsed > 0 && fpsCount.current % 10 === 0) {
+          setFps(Math.round((fpsCount.current - 1) / elapsed));
+        }
+      }
 
       if (!data.detected) {
         if (drawingRef.current) {
@@ -130,13 +160,6 @@ export default function App() {
     return () => { cancelled = true; clearTimeout(timer); };
   }, [started, wantCamera, cameraActive, startCamera, videoRef]);
 
-  const handleEmitParticles = useCallback((x, y, color, type) => {
-    const particles = window._airDoodleParticles;
-    if (!particles) return;
-    if (type === 'trail') particles.emitTrail(x, y, 0, color, 3);
-    else if (type === 'burst') particles.emitBurst(x, y, 0, color, 25);
-  }, []);
-
   const handleStrokeCountChange = useCallback((count) => setStrokeCount(count), []);
 
   const handleClear = useCallback(() => {
@@ -169,7 +192,11 @@ export default function App() {
   const handleExportVideo = useCallback(async () => {
     if (!canvasRef.current || isRecording) return;
     setIsRecording(true);
-    await exportCanvasAsVideo(canvasRef.current, 5000);
+    try {
+      await exportCanvasAsVideo(canvasRef.current, 5000);
+    } catch (err) {
+      console.error('Video export failed:', err);
+    }
     setIsRecording(false);
   }, [isRecording]);
 
@@ -181,6 +208,8 @@ export default function App() {
 
   useEffect(() => {
     const handleKey = (e) => {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
       if (e.ctrlKey && e.key === 'z') { e.preventDefault(); handleUndo(); }
       if (e.ctrlKey && e.key === 'y') { e.preventDefault(); handleRedo(); }
       if (e.key === 'd') setMode('draw');
@@ -205,16 +234,13 @@ export default function App() {
       <div style={styles.bg} />
       <div style={styles.vignette} />
 
-      {/* Particles (Three.js, behind the drawing) */}
       <AirCanvas canvasRef={canvasRef} />
 
-      {/* Single canvas: draws strokes AND captures mouse/touch */}
       <DoodleCanvas
         mode={mode}
         strokeManager={strokeManager}
         activeColor={activeColor}
         onStrokeCountChange={handleStrokeCountChange}
-        onEmitParticles={handleEmitParticles}
         effectsRef={effectsRef}
       />
 

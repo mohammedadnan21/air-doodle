@@ -5,7 +5,6 @@ export default function DoodleCanvas({
   strokeManager,
   activeColor,
   onStrokeCountChange,
-  onEmitParticles,
   effectsRef,
 }) {
   const canvasRef = useRef(null);
@@ -18,9 +17,9 @@ export default function DoodleCanvas({
   const modeRef = useRef(mode);
   const colorRef = useRef(activeColor);
   const countRef = useRef(onStrokeCountChange);
-  modeRef.current = mode;
-  colorRef.current = activeColor;
-  countRef.current = onStrokeCountChange;
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { colorRef.current = activeColor; }, [activeColor]);
+  useEffect(() => { countRef.current = onStrokeCountChange; }, [onStrokeCountChange]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -105,15 +104,18 @@ export default function DoodleCanvas({
     canvas.addEventListener('touchmove', onMove, { passive: false });
     canvas.addEventListener('touchend', onUp);
 
+    let disposed = false;
     const render = () => {
+      if (disposed) return;
       const w = canvas.width, h = canvas.height;
       ctx.clearRect(0, 0, w, h);
 
-      const all = strokeManager.currentStroke
-        ? [...strokeManager.strokes, strokeManager.currentStroke]
-        : strokeManager.strokes;
+      const strokes = strokeManager.strokes;
+      const current = strokeManager.currentStroke;
+      const len = strokes.length + (current ? 1 : 0);
 
-      for (const stroke of all) {
+      for (let si = 0; si < len; si++) {
+        const stroke = si < strokes.length ? strokes[si] : current;
         const pts = stroke.getTransformedPoints();
         if (pts.length < 2) continue;
 
@@ -129,7 +131,6 @@ export default function DoodleCanvas({
         ctx.stroke();
         ctx.restore();
 
-        // Hover box
         if (modeRef.current === 'drag' && hovered.current === stroke && !stroke.selected) {
           ctx.save();
           const b = stroke.getBounds(); const pad = 0.02;
@@ -140,7 +141,6 @@ export default function DoodleCanvas({
           ctx.restore();
         }
 
-        // Selection box
         if (stroke.selected) {
           ctx.save();
           const b = stroke.getBounds(); const pad = 0.025;
@@ -152,7 +152,6 @@ export default function DoodleCanvas({
         }
       }
 
-      // Cursor dot
       const cp = cursor.current;
       if (cp && modeRef.current === 'draw') {
         const cx = cp.x * w, cy = cp.y * h;
@@ -174,6 +173,7 @@ export default function DoodleCanvas({
     raf.current = requestAnimationFrame(render);
 
     return () => {
+      disposed = true;
       cancelAnimationFrame(raf.current);
       window.removeEventListener('resize', onResize);
       canvas.removeEventListener('pointerdown', onDown);
@@ -185,7 +185,7 @@ export default function DoodleCanvas({
       canvas.removeEventListener('touchend', onUp);
       if (effectsRef) effectsRef.current = null;
     };
-  }, [strokeManager]);
+  }, [strokeManager, effectsRef]);
 
   return (
     <canvas
