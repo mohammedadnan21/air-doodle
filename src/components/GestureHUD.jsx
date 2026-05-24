@@ -12,6 +12,8 @@ const GESTURE_INFO = {
   unknown: { icon: '❓', label: 'Unknown', action: '' },
 };
 
+const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
+
 export default function GestureHUD({ gesture, color, fps, strokeCount }) {
   const [flash, setFlash] = useState(false);
   const info = GESTURE_INFO[gesture] || GESTURE_INFO.unknown;
@@ -24,10 +26,15 @@ export default function GestureHUD({ gesture, color, fps, strokeCount }) {
 
   return (
     <div style={styles.container}>
-      <div style={styles.top}>
+      <div style={styles.left}>
         <div style={styles.logo}>
-          <span style={{ ...styles.logoText, textShadow: `0 0 20px ${color}` }}>AIR DOODLE</span>
-          <span style={styles.tagline}>Mohammad Adnan · RVCE</span>
+          <span style={{
+            ...styles.logoText,
+            textShadow: `0 0 20px ${color}`,
+            fontSize: isMobile ? 14 : 18,
+            letterSpacing: isMobile ? 3 : 6,
+          }}>AIR DOODLE</span>
+          {!isMobile && <span style={styles.tagline}>Mohammad Adnan · RVCE</span>}
         </div>
         <div style={styles.stats}>
           <span style={styles.stat}>{fps} FPS</span>
@@ -35,21 +42,28 @@ export default function GestureHUD({ gesture, color, fps, strokeCount }) {
         </div>
       </div>
 
-      <div style={{
-        ...styles.gestureIndicator,
-        borderColor: flash ? color : 'rgba(255,255,255,0.1)',
-        boxShadow: flash ? `0 0 30px ${color}40` : 'none',
-      }}>
-        <span style={styles.gestureIcon}>{info.icon}</span>
-        <div>
-          <div style={{ ...styles.gestureLabel, color }}>{info.label}</div>
-          <div style={styles.gestureAction}>{info.action}</div>
+      {!isMobile && (
+        <div style={{
+          ...styles.gestureIndicator,
+          borderColor: flash ? color : 'rgba(255,255,255,0.1)',
+          boxShadow: flash ? `0 0 30px ${color}40` : 'none',
+        }}>
+          <span style={styles.gestureIcon}>{info.icon}</span>
+          <div>
+            <div style={{ ...styles.gestureLabel, color }}>{info.label}</div>
+            <div style={styles.gestureAction}>{info.action}</div>
+          </div>
         </div>
-      </div>
+      )}
 
       <div style={styles.colorDot}>
+        {isMobile && (
+          <span style={{ fontSize: 14 }}>{info.icon}</span>
+        )}
         <div style={{
-          width: 16, height: 16, borderRadius: '50%',
+          width: isMobile ? 12 : 16,
+          height: isMobile ? 12 : 16,
+          borderRadius: '50%',
           background: color,
           boxShadow: `0 0 12px ${color}, 0 0 24px ${color}60`,
         }} />
@@ -61,15 +75,15 @@ export default function GestureHUD({ gesture, color, fps, strokeCount }) {
 const styles = {
   container: {
     position: 'absolute', top: 0, left: 0, right: 0,
-    padding: '20px 28px',
+    padding: isMobile ? '12px 14px' : '20px 28px',
     display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start',
     pointerEvents: 'none', zIndex: 20,
     fontFamily: "'Inter', 'SF Pro Display', system-ui, sans-serif",
   },
-  top: { display: 'flex', flexDirection: 'column', gap: 8 },
+  left: { display: 'flex', flexDirection: 'column', gap: isMobile ? 4 : 8 },
   logo: { display: 'flex', flexDirection: 'column' },
   logoText: {
-    fontSize: 18, fontWeight: 800, letterSpacing: 6,
+    fontWeight: 800,
     color: '#fff',
     textTransform: 'uppercase',
   },
@@ -77,9 +91,9 @@ const styles = {
     fontSize: 10, letterSpacing: 3, color: 'rgba(255,255,255,0.4)',
     textTransform: 'uppercase', marginTop: 2,
   },
-  stats: { display: 'flex', gap: 14, marginTop: 8 },
+  stats: { display: 'flex', gap: isMobile ? 10 : 14, marginTop: isMobile ? 4 : 8 },
   stat: {
-    fontSize: 11, color: 'rgba(255,255,255,0.35)',
+    fontSize: isMobile ? 10 : 11, color: 'rgba(255,255,255,0.35)',
     fontFamily: "'JetBrains Mono', monospace",
     letterSpacing: 1,
   },
@@ -90,6 +104,7 @@ const styles = {
     borderRadius: 12,
     border: '1px solid rgba(255,255,255,0.1)',
     backdropFilter: 'blur(16px)',
+    WebkitBackdropFilter: 'blur(16px)',
     transition: 'all 0.3s ease',
   },
   gestureIcon: { fontSize: 22 },
@@ -99,11 +114,12 @@ const styles = {
   },
   gestureAction: { fontSize: 10, color: 'rgba(255,255,255,0.35)', marginTop: 2 },
   colorDot: {
-    display: 'flex', alignItems: 'center', gap: 8,
-    padding: '8px 12px',
+    display: 'flex', alignItems: 'center', gap: 6,
+    padding: isMobile ? '6px 10px' : '8px 12px',
     background: 'rgba(0,0,0,0.4)',
     borderRadius: 10,
     border: '1px solid rgba(255,255,255,0.08)',
     backdropFilter: 'blur(12px)',
+    WebkitBackdropFilter: 'blur(12px)',
   },
 };

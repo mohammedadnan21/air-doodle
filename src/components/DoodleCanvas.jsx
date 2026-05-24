@@ -26,10 +26,14 @@ export default function DoodleCanvas({
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    const onResize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
-    window.addEventListener('resize', onResize);
+    const setSize = () => {
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    };
+    setSize();
+    window.addEventListener('resize', setSize);
 
     if (effectsRef) {
       effectsRef.current = { emitAt() {} };
@@ -37,16 +41,12 @@ export default function DoodleCanvas({
 
     const toNorm = (e) => {
       const r = canvas.getBoundingClientRect();
-      const cx = e.touches ? e.touches[0]?.clientX : e.clientX;
-      const cy = e.touches ? e.touches[0]?.clientY : e.clientY;
-      if (cx == null) return null;
-      return { x: (cx - r.left) / r.width, y: (cy - r.top) / r.height };
+      return { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
     };
 
     const onDown = (e) => {
       e.preventDefault();
       const p = toNorm(e);
-      if (!p) return;
       cursor.current = p;
 
       if (modeRef.current === 'draw') {
@@ -66,7 +66,6 @@ export default function DoodleCanvas({
     const onMove = (e) => {
       e.preventDefault();
       const p = toNorm(e);
-      if (!p) return;
       cursor.current = p;
 
       if (modeRef.current === 'draw' && drawing.current) {
@@ -100,14 +99,11 @@ export default function DoodleCanvas({
     canvas.addEventListener('pointermove', onMove);
     canvas.addEventListener('pointerup', onUp);
     canvas.addEventListener('pointerleave', onUp);
-    canvas.addEventListener('touchstart', onDown, { passive: false });
-    canvas.addEventListener('touchmove', onMove, { passive: false });
-    canvas.addEventListener('touchend', onUp);
 
     let disposed = false;
     const render = () => {
       if (disposed) return;
-      const w = canvas.width, h = canvas.height;
+      const w = window.innerWidth, h = window.innerHeight;
       ctx.clearRect(0, 0, w, h);
 
       const strokes = strokeManager.strokes;
@@ -175,14 +171,11 @@ export default function DoodleCanvas({
     return () => {
       disposed = true;
       cancelAnimationFrame(raf.current);
-      window.removeEventListener('resize', onResize);
+      window.removeEventListener('resize', setSize);
       canvas.removeEventListener('pointerdown', onDown);
       canvas.removeEventListener('pointermove', onMove);
       canvas.removeEventListener('pointerup', onUp);
       canvas.removeEventListener('pointerleave', onUp);
-      canvas.removeEventListener('touchstart', onDown);
-      canvas.removeEventListener('touchmove', onMove);
-      canvas.removeEventListener('touchend', onUp);
       if (effectsRef) effectsRef.current = null;
     };
   }, [strokeManager, effectsRef]);

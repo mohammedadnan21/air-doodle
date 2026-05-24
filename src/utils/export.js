@@ -24,6 +24,11 @@ function getSupportedMimeType() {
 
 export function exportCanvasAsVideo(canvas, durationMs = 5000) {
   return new Promise((resolve, reject) => {
+    if (!canvas.captureStream) {
+      reject(new Error('Video recording is not supported in this browser'));
+      return;
+    }
+
     let stream;
     try {
       stream = canvas.captureStream(30);

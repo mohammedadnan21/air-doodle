@@ -7,10 +7,13 @@ export default function DrawingCanvas({ strokeManager }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const ctx = canvas.getContext('2d');
 
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = window.innerWidth * dpr;
+      canvas.height = window.innerHeight * dpr;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     };
     resize();
     window.addEventListener('resize', resize);
@@ -18,9 +21,8 @@ export default function DrawingCanvas({ strokeManager }) {
     let disposed = false;
     const draw = () => {
       if (disposed) return;
-      const w = canvas.width;
-      const h = canvas.height;
-      const ctx = canvas.getContext('2d');
+      const w = window.innerWidth;
+      const h = window.innerHeight;
 
       ctx.clearRect(0, 0, w, h);
 
